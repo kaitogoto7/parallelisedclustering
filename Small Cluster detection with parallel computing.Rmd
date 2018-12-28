@@ -1,0 +1,89 @@
+---
+title: "Small Cluster detection with parallel computing"
+output: html_document
+---
+
+```{r}
+df <- read.csv("2013CensusNew.csv")
+numeric.only.df <- df[,-c(1,2)]
+
+L = 2 #must be two
+J = c(5,6,10) #can be a numeric vector
+n = nrow(df) #number of data points
+
+optimal.clusters <- kmeans(numeric.only.df, centers = L, nstart = 1000)$cluster
+size.of.optimal.clusters <- unname(table(optimal.clusters))
+small.clusters.indexes <- c()
+```
+
+```{r}
+helper <- function(cluster.number, j, L, optimal.clusters, size.of.optimal.clusters, small.clusters){
+    get.small.cluster.members.logical <- c(small.clusters == cluster.number) #True or False for "Does the data point at a particular index belong to "cluster.number'?"
+    current.cluster.size <- sum(get.small.cluster.members.logical) #size of small cluster currently analyzed
+    if(current.cluster.size >= j){ #we are only interested if the small cluster's size is at least j
+      
+      #To avoid membership.under.optimal.clusters becoming a one element vector when all data points belong to same large cluster
+      membership.under.optimal.clusters <- unname(table(c(1:L, optimal.clusters[get.small.cluster.members.logical]))) #Which of the four optimal clusters the data points in cluster "cluster.number" a member of under M-means.
+      membership.under.optimal.clusters <- membership.under.optimal.clusters - rep(1,L) #Adjust
+      
+      #Calculate the p-value:
+      p.value <- phyper(q = membership.under.optimal.clusters[1],m = size.of.optimal.clusters[1], n = size.of.optimal.clusters[2], k = current.cluster.size)
+      
+      if(p.value > 0.025 && p.value < 0.975){ #if the small.cluster is an ubias sample of the large optimal clusters
+        return(which(get.small.cluster.members.logical))
+      }
+    }
+  }
+
+```
+
+```{r}
+library(parallel)
+
+start.time <- Sys.time()
+for (j in J){ #"For each value in vector J"
+  M <- n/j #initialize M
+  M <- round(M)
+  small.clusters <- kmeans(numeric.only.df, centers = M, nstart = 1000)$cluster #Small clusters under M-means
+  #for(cluster.number in 1:M){ #REPLACE THIS WITH PARALELL COMPUTING
+    cl <- makeCluster(M)
+    small.clusters.indexes <- c(small.clusters.indexes, parSapply(cl, 1:M, "helper", j, L, optimal.clusters, size.of.optimal.clusters, small.clusters))
+  #}
+}
+small.clusters.indexes <- small.clusters.indexes[!sapply(small.clusters.indexes, is.null)]
+end.time <- Sys.time()
+run.time <- end.time - start.time
+
+small.clusters.indexes
+cat("Run time of the algorithm is", run.time, "seconds")
+```
+
+```{r}
+library(MASS)
+pcs <- princomp(numeric.only.df[,-c(ncol(numeric.only.df))]) #If a column is not dropped, Eigenvalue for last component will be 0 because the dataframe will not be full rank
+
+#Set the cluster colours
+cluster.color <- optimal.clusters
+cluster.color[optimal.clusters == 1] <- "red" 
+cluster.color[optimal.clusters == 2] <- "blue"
+
+#Visualize the initial two clusters
+eqscplot(pcs$scores[,1:2],type="n", xlab = "PC 1", ylab = "PC 2")
+text(pcs$scores[,1:2],labels=as.vector(optimal.clusters), col = cluster.color)
+
+#Identify the selected small cluster detected as cluster 3
+selected.cluster.index <- length(small.clusters.indexes) #select the last small cluster detected
+selected.small.cluster.indexes <- small.clusters.indexes[[selected.cluster.index]]
+new.optimal.clusters <- optimal.clusters
+new.optimal.clusters[selected.small.cluster.indexes] <- 3
+
+#Set the new cluster colours
+new.cluster.color <- new.optimal.clusters
+new.cluster.color[new.optimal.clusters == 1] <- "red"
+new.cluster.color[new.optimal.clusters == 2] <- "blue"
+new.cluster.color[new.optimal.clusters == 3] <- "green"
+
+#Visualize selected small cluster detected with the initial two clusters
+eqscplot(pcs$scores[,1:2],type="n", xlab = "PC 1", ylab = "PC 2")
+text(pcs$scores[,1:2],labels=as.vector(new.optimal.clusters), col = new.cluster.color)
+```
