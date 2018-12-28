@@ -1,6 +1,6 @@
 # parallelisedclustering
 
-The algorithm is described below:
+The clustering algorithm parallelised by the Rmd file is described below:
 
 If there are n data points and want to detect any small clusters with at least x, y or z (denote as
 vector J) data points, M is the number of small clusters wanted for each value in vector J (i.e. M =
