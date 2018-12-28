@@ -15,9 +15,9 @@ want to detect small clusters with 1,000 or 2,000 data points after
 performing a 3-means.
 
 The parameters will be:
-• n = 1,000,000
-• M = [1,000 500] because n/J = 1,000,000 / [1,000 2,000]
-• L = 3
+n = 1,000,000
+M = [1,000 500] because n/J = 1,000,000 / [1,000 2,000]
+L = 3
 
 We then perform a 1,000-means and 500-means clustering.
 
